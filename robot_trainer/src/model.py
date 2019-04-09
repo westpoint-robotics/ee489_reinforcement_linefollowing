@@ -23,9 +23,8 @@ replay_memory = []
 pretrain_memory = []
 
 # algorithm parameters
-max_steps = 200
+max_steps = 300
 total_reward = 0
-ep_reward = 0
 batch_size = 10
 gamma = 0.95 #discount rate
 terminate_state = [0] * 9
@@ -73,34 +72,34 @@ def pretrain_model():
         state = np.array(list(map(int,list(str(preprocessed[i])))))
         pretrain_states[int(i/2)] = state
         if preprocessed[i+1] == 'l':
-            action = np.array([1,0,0])
+            action = np.array([5,0,0])
         elif preprocessed[i+1] == 'r':
-            action = np.array([0,1,0])
+            action = np.array([0,5,0])
         else:
-            action = np.array([0,0,1])
+            action = np.array([0,0,5])
         pretrain_actions[int(i/2)] = action
     f.close
     history = model.fit(pretrain_states, pretrain_actions, validation_split=0.1,epochs=100,batch_size =20, verbose = 2)  ##train and validation is split over 90 % subset
 
 
-pretrain_model()
+#pretrain_model()
 model._make_predict_function()
 global graph
 graph = tf.get_default_graph()
 
 def take_action(a):
-        if a == 's':
-            move_cmd.linear.x = .15
-            move_cmd.angular.z = 0
-        elif a == 'r':
-            move_cmd.linear.x = .15
-            move_cmd.angular.z = -.80
-        elif a == 'l':
-            move_cmd.linear.x = .15
-            move_cmd.angular.z = .80
-        else:
-            move_cmd.linear.x = 0
-            move_cmd.angular.z = 0
+    if a == 's':
+        move_cmd.linear.x = .15
+        move_cmd.angular.z = 0
+    elif a == 'r':
+        move_cmd.linear.x = .15
+        move_cmd.angular.z = -.80
+    elif a == 'l':
+        move_cmd.linear.x = .15
+        move_cmd.angular.z = .80
+    else:
+        move_cmd.linear.x = 0
+        move_cmd.angular.z = 0
 
 
 def joy_callback(data):
@@ -110,9 +109,9 @@ def joy_callback(data):
 def reward_function(state):
     r = 0
     if state[7] == 1:
-        r = -5
+        r = -1
     elif not any(state):
-        r = -100
+        r = -500
     else:
         r = 5
     return r
@@ -126,11 +125,11 @@ def train_model(memory,batch_size):
     for state, action, reward, n_state in minibatch:
         with graph.as_default():
             target = reward
-            if reward != -100:
-                target += gamma * np.amax(model.predict([[n_state]])[0])
-            target_f = model.predict([[state]])
+            if reward != -500:
+                target += gamma * np.amax(model.predict(np.array([n_state]))[0])
+            target_f = model.predict(np.array([state]))
             target_f[0][action] = target
-            model.fit([[state]],target_f,epochs=1, verbose=0)
+            model.fit(np.array([state]),np.array(target_f),epochs=1, verbose=0)
 
 def training(data):
     global state_count, current_state, last_state, total_reward
@@ -145,21 +144,21 @@ def training(data):
     if state_count >= max_steps or current_state == terminate_state:
         # how to pause and increment episode?
         # have a state selection variable
-        explore_rate -= explore_decay
         rospy.loginfo("terminate this episode")
         is_training = False
 
     exploreChoice = random.uniform(0,1)
     aInt = 0
-    if 1: #exploreChoice > explore_rate: # we should exploit
-        with graph.as_default():
+    if exploreChoice > explore_rate: # we should exploit
+        if state_count == 0:
+            with graph.as_default():
+                aInt = np.argmax(model.predict(np.array([current_state]))[0])
+        else:
             aInt = np.argmax(model.predict(np.array([current_state]))[0])
     else:
         # explore
         aInt = random.randint(0,2)
     action = action_space[aInt]
-    aArray = [0,0,0]
-    aArray[aInt] = 1
 
     # we then send the associated action to the turtlebot
     take_action(action)
@@ -168,15 +167,16 @@ def training(data):
     replay_memory = list(replay_memory)
     if state_count > 0:
         reward = reward_function(current_state)
+        print("reward: ", reward)
         total_reward += reward
         # should be last action, not current action
-        if total_count<=300:
-            replay_memory.append([last_state,aArray,reward,current_state])
+        if total_count<300:
+            replay_memory.append([last_state,aInt,reward,current_state])
         else:
-            replay_memory[(total_count-1)%300] = [last_state,aInt,reward,current_state]
+            replay_memory[(total_count)%300] = [last_state,aInt,reward,current_state]
         # pass batch from replay memory to the networks
         replay_memory = np.array(replay_memory)
-        #train_model(replay_memory,10)
+        train_model(replay_memory,10)
         #replay_memory[:,2] = discount_rewards(replay_memory[:,2])
 
     state_count += 1
@@ -186,14 +186,13 @@ def training(data):
 
 def standby(data):
     global explore_rate, explore_decay,min_explore
-    global is_training, ep_reward, replay_memory, state_count
+    global is_training, replay_memory, state_count
     rospy.loginfo("Awaiting restart")
     move_cmd.linear.x = 0
     move_cmd.angular.z = 0
     #restart on button press
     if buttons[2] == 1: #press 'x' to start new episode
         is_training = True
-        ep_reward = 0
         state_count = 0
         if explore_rate > min_explore:
             explore_rate -= explore_decay
