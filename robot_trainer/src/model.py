@@ -11,6 +11,7 @@ from std_msgs.msg import UInt16MultiArray
 from sensor_msgs.msg import Joy
 from geometry_msgs.msg import Twist
 # experiences should have state, action, reward, state + 1
+aInt = 0
 state_count = 0
 total_count = 0
 current_state = [0] * 9
@@ -30,7 +31,7 @@ gamma = 0.95 #discount rate
 terminate_state = [0] * 9
 
 #exploration parameters
-max_explore = .5
+max_explore = .9
 explore_rate = max_explore
 min_explore = .01
 explore_decay = 0.01
@@ -82,7 +83,7 @@ def pretrain_model():
     history = model.fit(pretrain_states, pretrain_actions, validation_split=0.1,epochs=100,batch_size =20, verbose = 2)  ##train and validation is split over 90 % subset
 
 
-#pretrain_model()
+pretrain_model()
 model._make_predict_function()
 global graph
 graph = tf.get_default_graph()
@@ -111,7 +112,7 @@ def reward_function(state):
     if state[7] == 1:
         r = -1
     elif not any(state):
-        r = -500
+        r = -100
     else:
         r = 5
     return r
@@ -119,20 +120,22 @@ def reward_function(state):
 # why do we need double brackets?
 def train_model(memory,batch_size):
     global model, is_training, gamma
-    if batch_size > np.size(memory,0):
+    if batch_size > np.size(2*memory,0):
         return
     minibatch = random.sample(memory,batch_size)
     for state, action, reward, n_state in minibatch:
         with graph.as_default():
             target = reward
-            if reward != -500:
+            #print(target, state, n_state)
+            if reward != 0:
                 target += gamma * np.amax(model.predict(np.array([n_state]))[0])
             target_f = model.predict(np.array([state]))
             target_f[0][action] = target
+            #print(target_f[0])
             model.fit(np.array([state]),np.array(target_f),epochs=1, verbose=0)
 
 def training(data):
-    global state_count, current_state, last_state, total_reward
+    global state_count, current_state, last_state, total_reward, aInt
     global action, action_space, max_steps, replay_memory, model
     global batch_size, terminate_state, is_training, reward, total_count
     global explore_rate, max_explore, min_explore, explore_decay
@@ -148,16 +151,18 @@ def training(data):
         is_training = False
 
     exploreChoice = random.uniform(0,1)
+    lastAInt = aInt
     aInt = 0
-    if exploreChoice > explore_rate: # we should exploit
-        if state_count == 0:
-            with graph.as_default():
-                aInt = np.argmax(model.predict(np.array([current_state]))[0])
-        else:
-            aInt = np.argmax(model.predict(np.array([current_state]))[0])
+    if 1: #exploreChoice > explore_rate: # we should exploit
+        with graph.as_default():
+            result = model.predict(np.array([current_state]))[0]
+            aInt = np.argmax(result)
+            expectedValue = np.amax(result)
+            rospy.loginfo(result)
     else:
         # explore
         aInt = random.randint(0,2)
+
     action = action_space[aInt]
 
     # we then send the associated action to the turtlebot
@@ -171,9 +176,9 @@ def training(data):
         total_reward += reward
         # should be last action, not current action
         if total_count<300:
-            replay_memory.append([last_state,aInt,reward,current_state])
+            replay_memory.append([last_state,lastAInt,reward,current_state])
         else:
-            replay_memory[(total_count)%300] = [last_state,aInt,reward,current_state]
+            replay_memory[(total_count)%300] = [last_state,lastAInt,reward,current_state]
         # pass batch from replay memory to the networks
         replay_memory = np.array(replay_memory)
         train_model(replay_memory,10)
@@ -182,12 +187,10 @@ def training(data):
     state_count += 1
     total_count += 1
     last_state = current_state
-    rospy.loginfo(state_count)
 
 def standby(data):
     global explore_rate, explore_decay,min_explore
     global is_training, replay_memory, state_count
-    rospy.loginfo("Awaiting restart")
     move_cmd.linear.x = 0
     move_cmd.angular.z = 0
     #restart on button press
