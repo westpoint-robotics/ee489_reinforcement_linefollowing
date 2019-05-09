@@ -1,0 +1,46 @@
+Overall list of step counts: 
+6
+6
+17
+7
+10
+17
+5
+16
+18
+6
+Overall list of good state step counts: 
+3
+3
+6
+0
+3
+10
+2
+6
+7
+2
+Overall list of step counts: 
+13
+Overall list of good state step counts: 
+9
+Overall list of step counts: 
+25
+Overall list of good state step counts: 
+16
+Overall list of step counts: 
+7
+Overall list of good state step counts: 
+2
+Overall list of step counts: 
+88
+Overall list of good state step counts: 
+55
+Overall list of step counts: 
+6
+Overall list of good state step counts: 
+3
+Overall list of step counts: 
+64
+Overall list of good state step counts: 
+31

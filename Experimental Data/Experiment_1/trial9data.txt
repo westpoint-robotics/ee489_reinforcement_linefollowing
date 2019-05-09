@@ -1,0 +1,102 @@
+Episode number: 1
+Steps lasted: 4
+Steps in good state: 1
+Episode number: 2
+Steps lasted: 18
+Steps in good state: 11
+Episode number: 3
+Steps lasted: 6
+Steps in good state: 2
+Episode number: 4
+Steps lasted: 8
+Steps in good state: 3
+Episode number: 5
+Steps lasted: 4
+Steps in good state: 1
+Episode number: 6
+Steps lasted: 6
+Steps in good state: 2
+Episode number: 7
+Steps lasted: 4
+Steps in good state: 1
+Episode number: 8
+Steps lasted: 10
+Steps in good state: 2
+Episode number: 9
+Steps lasted: 9
+Steps in good state: 4
+Episode number: 10
+Steps lasted: 12
+Steps in good state: 4
+Episode number: 11
+Steps lasted: 12
+Steps in good state: 7
+Episode number: 12
+Steps lasted: 13
+Steps in good state: 6
+Episode number: 13
+Steps lasted: 10
+Steps in good state: 3
+Episode number: 14
+Steps lasted: 3
+Steps in good state: 0
+Episode number: 15
+Steps lasted: 13
+Steps in good state: 4
+Episode number: 16
+Steps lasted: 9
+Steps in good state: 5
+Episode number: 17
+Steps lasted: 5
+Steps in good state: 2
+Episode number: 18
+Steps lasted: 8
+Steps in good state: 5
+Episode number: 19
+Steps lasted: 14
+Steps in good state: 7
+Episode number: 20
+Steps lasted: 4
+Steps in good state: 1
+Episode number: 21
+Steps lasted: 6
+Steps in good state: 2
+Episode number: 22
+Steps lasted: 5
+Steps in good state: 3
+Episode number: 23
+Steps lasted: 6
+Steps in good state: 3
+Episode number: 24
+Steps lasted: 6
+Steps in good state: 1
+Episode number: 25
+Steps lasted: 3
+Steps in good state: 0
+Episode number: 26
+Steps lasted: 7
+Steps in good state: 1
+Episode number: 27
+Steps lasted: 17
+Steps in good state: 14
+Episode number: 28
+Steps lasted: 8
+Steps in good state: 3
+Episode number: 29
+Steps lasted: 6
+Steps in good state: 1
+Episode number: 30
+Steps lasted: 7
+Steps in good state: 4
+Episode number: 31
+Steps lasted: 6
+Steps in good state: 3
+Episode number: 32
+Steps lasted: 22
+Steps in good state: 16
+Episode number: 33
+Steps lasted: 7
+Steps in good state: 4
+Episode number: 34
+Steps lasted: 6
+Steps in good state: 1
