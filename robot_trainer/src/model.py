@@ -10,33 +10,40 @@ from keras import optimizers, regularizers,initializers
 from std_msgs.msg import UInt16MultiArray
 from sensor_msgs.msg import Joy
 from geometry_msgs.msg import Twist
+from keras.constraints import max_norm
 # experiences should have state, action, reward, state + 1
 aInt = 0
 state_count = 0
 total_count = 0
+replay_size = 100
+state_count_array = []
+state_count_in_prime = 0
+state_count_in_prime_array = []
 current_state = [0] * 9
 last_state = [0] * 9
 reward = 0
 reward_list = []
 action = ''
-action_space = ["l","r","s"]
+action_space = ["l","s","r"]
 replay_memory = []
 pretrain_memory = []
+ep_counter = 0
+train_mode = True
+trial = "trial1"
 
+output = open("/home/rrc/RL_Pathfollowing_Data/5_to_50/"+trial+".txt","w+")
 # algorithm parameters
-max_steps = 300
-total_reward = 0
 batch_size = 10
 gamma = 0.95 #discount rate
 terminate_state = [0] * 9
 
 #exploration parameters
-max_explore = .9
+max_explore = 1
 explore_rate = max_explore
-min_explore = .01
-explore_decay = 0.01
+min_explore = 0.50
+explore_decay = 0.5
 
-is_training = True
+is_executing = True
 
 
 #controller stuff
@@ -47,22 +54,13 @@ hiddenLayerDimension = 16  ##hidden layer dimension
 model = Sequential()
 model.add(Dense(units=hiddenLayerDimension, activation='relu', input_dim=9))  ##input layer
 for i in range(1):
-    model.add(Dense(units=hiddenLayerDimension, activation='relu', input_dim=hiddenLayerDimension))##hidden layers
+    model.add(Dense(units=hiddenLayerDimension, activation='relu', input_dim=hiddenLayerDimension,kernel_constraint=max_norm(1)))##hidden layers
 
 #model.add(Dense(units=hiddenLayerDimension, activation='relu', kernel_regularizer=regularizers.l2(3),input_dim=hiddenLayerDimension)) ##regularize last hiddne layer
 
 model.add(Dense(units=3, activation='softmax', input_dim=hiddenLayerDimension))##output layer
 adam=optimizers.Adam(lr=0.001  , beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.0, amsgrad=False)
 model.compile(loss='categorical_crossentropy', optimizer=adam)
-
-# def discount_rewards(r):
-#     gamma = 0.99 #discount past rewards - not part of network
-#     new_reward = 0
-#     discount_rewards = np.zeros_like(r)
-#     for i in reversed(xrange(0,r.size)):
-#         new_reward = new_reward * gamma + r[i]
-#         discount_rewards[i] = new_reward
-#     return discount_rewards
 
 def pretrain_model():
     f = open("/home/rrc/path following testing area/training_data.txt", "r")
@@ -73,31 +71,31 @@ def pretrain_model():
         state = np.array(list(map(int,list(str(preprocessed[i])))))
         pretrain_states[int(i/2)] = state
         if preprocessed[i+1] == 'l':
-            action = np.array([5,0,0])
+            action = np.array([1,0,0])
         elif preprocessed[i+1] == 'r':
-            action = np.array([0,5,0])
+            action = np.array([0,0,1])
         else:
-            action = np.array([0,0,5])
+            action = np.array([0,1,0])
         pretrain_actions[int(i/2)] = action
     f.close
     history = model.fit(pretrain_states, pretrain_actions, validation_split=0.1,epochs=100,batch_size =20, verbose = 2)  ##train and validation is split over 90 % subset
 
 
-pretrain_model()
+#pretrain_model()
 model._make_predict_function()
 global graph
 graph = tf.get_default_graph()
 
 def take_action(a):
     if a == 's':
-        move_cmd.linear.x = .15
+        move_cmd.linear.x = .3
         move_cmd.angular.z = 0
     elif a == 'r':
-        move_cmd.linear.x = .15
-        move_cmd.angular.z = -.80
+        move_cmd.linear.x = .3
+        move_cmd.angular.z = -1.60
     elif a == 'l':
-        move_cmd.linear.x = .15
-        move_cmd.angular.z = .80
+        move_cmd.linear.x = .3
+        move_cmd.angular.z = 1.60
     else:
         move_cmd.linear.x = 0
         move_cmd.angular.z = 0
@@ -107,101 +105,144 @@ def joy_callback(data):
     global buttons
     buttons = data.buttons
 
-def reward_function(state):
-    r = 0
+def reward_function(state,action):
+    r = 1 # weaker difference seems to help?
     if state[7] == 1:
-        r = -1
+        r = 0
     elif not any(state):
-        r = -100
-    else:
-        r = 5
+        r = -1
     return r
 
-# why do we need double brackets?
 def train_model(memory,batch_size):
-    global model, is_training, gamma
-    if batch_size > np.size(2*memory,0):
+    global model, gamma
+    if batch_size > (np.size(memory,0)):
         return
     minibatch = random.sample(memory,batch_size)
     for state, action, reward, n_state in minibatch:
         with graph.as_default():
             target = reward
             #print(target, state, n_state)
-            if reward != 0:
+            if reward != -1:
                 target += gamma * np.amax(model.predict(np.array([n_state]))[0])
             target_f = model.predict(np.array([state]))
             target_f[0][action] = target
             #print(target_f[0])
             model.fit(np.array([state]),np.array(target_f),epochs=1, verbose=0)
 
+
 def training(data):
-    global state_count, current_state, last_state, total_reward, aInt
-    global action, action_space, max_steps, replay_memory, model
-    global batch_size, terminate_state, is_training, reward, total_count
-    global explore_rate, max_explore, min_explore, explore_decay
+    global state_count, current_state, last_state, aInt, state_count_in_prime
+    global action, action_space, replay_memory, model, buttons
+    global batch_size, terminate_state, is_executing, reward, total_count
+    global explore_rate, max_explore, min_explore, explore_decay, state_count_in_prime
 
     current_state = list(data.data)
 
-    rospy.loginfo(current_state)
-
-    if state_count >= max_steps or current_state == terminate_state:
+    kill = False
+    # press 'a' to terminate early
+    if current_state == terminate_state or buttons[0] == 1:
         # how to pause and increment episode?
         # have a state selection variable
         rospy.loginfo("terminate this episode")
-        is_training = False
+        is_executing = False
+        kill = True
 
     exploreChoice = random.uniform(0,1)
     lastAInt = aInt
     aInt = 0
-    if 1: #exploreChoice > explore_rate: # we should exploit
+    if exploreChoice > explore_rate or train_mode == False: # we should exploit
         with graph.as_default():
             result = model.predict(np.array([current_state]))[0]
             aInt = np.argmax(result)
-            expectedValue = np.amax(result)
-            rospy.loginfo(result)
+            print(result)
+            print("I picked: " + action_space[aInt])
     else:
         # explore
         aInt = random.randint(0,2)
 
     action = action_space[aInt]
-
     # we then send the associated action to the turtlebot
     take_action(action)
-    rospy.loginfo("action: " + action)
 
     replay_memory = list(replay_memory)
     if state_count > 0:
-        reward = reward_function(current_state)
-        print("reward: ", reward)
-        total_reward += reward
+        if not kill: reward = reward_function(current_state,lastAInt)
+        else: reward = -1
+        print(last_state,action_space[lastAInt],reward,current_state)
         # should be last action, not current action
-        if total_count<300:
+        if total_count < replay_size:
             replay_memory.append([last_state,lastAInt,reward,current_state])
-        else:
-            replay_memory[(total_count)%300] = [last_state,lastAInt,reward,current_state]
+        else: replay_memory[total_count%replay_size] = [last_state,lastAInt,reward,current_state]
         # pass batch from replay memory to the networks
-        replay_memory = np.array(replay_memory)
-        train_model(replay_memory,10)
-        #replay_memory[:,2] = discount_rewards(replay_memory[:,2])
+        if train_mode == True:
+            replay_memory = np.array(replay_memory)
+            train_model(replay_memory,batch_size)
+            print("training")
+        if reward == 1:
+            state_count_in_prime += 1
+        total_count += 1
 
     state_count += 1
-    total_count += 1
     last_state = current_state
 
 def standby(data):
-    global explore_rate, explore_decay,min_explore
-    global is_training, replay_memory, state_count
+    global explore_rate, explore_decay, min_explore, train_mode
+    global is_executing, replay_memory, state_count, ep_counter, state_count_in_prime
+    global state_count_array, state_count_in_prime_array
     move_cmd.linear.x = 0
     move_cmd.angular.z = 0
     #restart on button press
-    if buttons[2] == 1: #press 'x' to start new episode
-        is_training = True
+    if buttons[2] == 1: # press 'x' to resume training
+        is_executing = True
+        train_mode = True
+        ep_counter += 1
+        print("That was episode number: ",ep_counter)
+        print("Total steps: ",state_count)
+        print("Of which this many were in good state: ", state_count_in_prime)
+        state_count_array.append(state_count)
+        state_count_in_prime_array.append(state_count_in_prime)
         state_count = 0
-        if explore_rate > min_explore:
+        state_count_in_prime = 0
+        if explore_rate-explore_decay >= min_explore:
             explore_rate -= explore_decay
+            rospy.loginfo(explore_rate)
+    elif buttons[3] == 1: # press 'y' to enter testing
+    # it currently simply closes out the episode
+        is_executing = True
+        train_mode = False
+        ep_counter += 1
+        print("That was episode number: ",ep_counter)
+        print("Total steps: ",state_count)
+        print("Of which this many were in good state: ", state_count_in_prime)
+        state_count_array.append(state_count)
+        state_count_in_prime_array.append(state_count_in_prime)
+        output.write("Overall list of step counts: \n")
+        for count in state_count_array:
+            output.write("%d\n" % (count))
+        state_count_array[:]=[]
+        output.write("Overall list of good state step counts: \n")
+        for count in state_count_in_prime_array:
+            output.write("%d\n" % (count))
+        state_count_in_prime_array[:]=[]
+        state_count = 0
+        state_count_in_prime = 0
+
+    elif buttons[1] == 1: # press 'b' to exit completely
+        print("done")
+        state_count_array.append(state_count)
+        state_count_in_prime_array.append(state_count_in_prime)
+        output.write("Overall list of step counts: \n")
+        for count in state_count_array:
+            output.write("%d\n" % (count))
+        state_count_array[:]=[]
+        output.write("Overall list of good state step counts: \n")
+        for count in state_count_in_prime_array:
+            output.write("%d\n" % (count))
+        state_count_in_prime_array[:]=[]
+        output.close()
 
 def callback(data):
-    if is_training:
+    if is_executing:
         training(data)
     else:
         standby(data)
@@ -210,7 +251,7 @@ def listener():
     global move_cmd
     rospy.init_node('listener',anonymous=True)
     cmd_vel = rospy.Publisher('/mobile_base/commands/velocity', Twist, queue_size=1)
-    rate = rospy.Rate(3)
+    rate = rospy.Rate(40)
     rospy.Subscriber("joy", Joy, joy_callback) # sub to controller
     rospy.Subscriber("camera_state", UInt16MultiArray, callback)
     while not rospy.is_shutdown():
