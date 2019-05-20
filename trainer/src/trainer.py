@@ -18,14 +18,14 @@ move_cmd = Twist()
 
 def take_action(a):
         if a == 's':
-            move_cmd.linear.x = .15
+            move_cmd.linear.x = .3
             move_cmd.angular.z = 0
         elif a == 'r':
-            move_cmd.linear.x = .15
-            move_cmd.angular.z = -.80
+            move_cmd.linear.x = .3
+            move_cmd.angular.z = -1.60
         elif a == 'l':
-            move_cmd.linear.x = .15
-            move_cmd.angular.z = .80
+            move_cmd.linear.x = .3
+            move_cmd.angular.z = 1.60
         else:
             move_cmd.linear.x = 0
             move_cmd.angular.z = 0
@@ -69,8 +69,8 @@ def callback(data):
 def listener():
     global move_cmd
     rospy.init_node('trainer',anonymous=True,disable_signals=True)
-    cmd_vel = rospy.Publisher('/mobile_base/commands/velocity', Twist, queue_size=10)
-    rate = rospy.Rate(3)
+    cmd_vel = rospy.Publisher('/mobile_base/commands/velocity', Twist, queue_size=1)
+    rate = rospy.Rate(2)
     rospy.Subscriber("joy", Joy, joy_callback) # sub to controller
     rospy.Subscriber("camera_state", UInt16MultiArray, callback)
     while not rospy.is_shutdown():

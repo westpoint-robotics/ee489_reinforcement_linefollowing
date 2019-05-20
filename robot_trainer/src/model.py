@@ -22,26 +22,27 @@ state_count_in_prime_array = []
 current_state = [0] * 9
 last_state = [0] * 9
 reward = 0
-reward_list = []
+total_reward = 0
 action = ''
 action_space = ["l","s","r"]
 replay_memory = []
 pretrain_memory = []
 ep_counter = 0
 train_mode = True
-trial = "trial1"
+trial = "Trial"
 
-output = open("/home/rrc/RL_Pathfollowing_Data/5_to_50/"+trial+".txt","w+")
+rewardOutput = open("/home/rrc/RL_Pathfollowing_Data/New_Expirement/6.67_percent/"+trial+"reward.txt","w+")
+testOutput = open("/home/rrc/RL_Pathfollowing_Data/New_Expirement/6.67_percent/"+trial+"test.txt","w+")
 # algorithm parameters
 batch_size = 10
 gamma = 0.95 #discount rate
 terminate_state = [0] * 9
 
 #exploration parameters
-max_explore = 1
+min_explore = 0.00
+explore_decay = 0.0667
+max_explore = 1 + explore_decay
 explore_rate = max_explore
-min_explore = 0.50
-explore_decay = 0.5
 
 is_executing = True
 
@@ -106,7 +107,7 @@ def joy_callback(data):
     buttons = data.buttons
 
 def reward_function(state,action):
-    r = 1 # weaker difference seems to help?
+    r = 1 # weaker difference seems to help
     if state[7] == 1:
         r = 0
     elif not any(state):
@@ -132,7 +133,7 @@ def train_model(memory,batch_size):
 
 def training(data):
     global state_count, current_state, last_state, aInt, state_count_in_prime
-    global action, action_space, replay_memory, model, buttons
+    global action, action_space, replay_memory, model, buttons, total_reward
     global batch_size, terminate_state, is_executing, reward, total_count
     global explore_rate, max_explore, min_explore, explore_decay, state_count_in_prime
 
@@ -170,20 +171,25 @@ def training(data):
         else: reward = -1
         print(last_state,action_space[lastAInt],reward,current_state)
         # should be last action, not current action
-        if total_count < replay_size:
-            replay_memory.append([last_state,lastAInt,reward,current_state])
-        else: replay_memory[total_count%replay_size] = [last_state,lastAInt,reward,current_state]
-        # pass batch from replay memory to the networks
         if train_mode == True:
+            if total_count < replay_size:
+                replay_memory.append([last_state,lastAInt,reward,current_state])
+            else: replay_memory[total_count%replay_size] = [last_state,lastAInt,reward,current_state]
+            # pass batch from replay memory to the networks
+
             replay_memory = np.array(replay_memory)
             train_model(replay_memory,batch_size)
             print("training")
+            total_count += 1
+            total_reward += reward
+            rewardOutput.write("%d\n" % (total_reward))
         if reward == 1:
             state_count_in_prime += 1
-        total_count += 1
 
     state_count += 1
     last_state = current_state
+    if state_count == 65:
+        is_executing = False
 
 def standby(data):
     global explore_rate, explore_decay, min_explore, train_mode
@@ -193,14 +199,24 @@ def standby(data):
     move_cmd.angular.z = 0
     #restart on button press
     if buttons[2] == 1: # press 'x' to resume training
+        if train_mode == False:
+            train_mode = True
+            state_count_array.append(state_count)
+            state_count_in_prime_array.append(state_count_in_prime)
+            testOutput.write("Overall list of step counts: \n")
+            for count in state_count_array:
+                testOutput.write("%d\n" % (count))
+            state_count_array[:]=[]
+            testOutput.write("Overall list of good state step counts: \n")
+            for count in state_count_in_prime_array:
+                testOutput.write("%d\n" % (count))
+            state_count_in_prime_array[:]=[]
+
         is_executing = True
-        train_mode = True
         ep_counter += 1
         print("That was episode number: ",ep_counter)
-        print("Total steps: ",state_count)
-        print("Of which this many were in good state: ", state_count_in_prime)
-        state_count_array.append(state_count)
-        state_count_in_prime_array.append(state_count_in_prime)
+        #state_count_array.append(state_count)
+        #state_count_in_prime_array.append(state_count_in_prime)
         state_count = 0
         state_count_in_prime = 0
         if explore_rate-explore_decay >= min_explore:
@@ -208,22 +224,14 @@ def standby(data):
             rospy.loginfo(explore_rate)
     elif buttons[3] == 1: # press 'y' to enter testing
     # it currently simply closes out the episode
+        if train_mode == True:
+            train_mode = False
+        else:
+            state_count_array.append(state_count)
+            state_count_in_prime_array.append(state_count_in_prime)
         is_executing = True
-        train_mode = False
         ep_counter += 1
         print("That was episode number: ",ep_counter)
-        print("Total steps: ",state_count)
-        print("Of which this many were in good state: ", state_count_in_prime)
-        state_count_array.append(state_count)
-        state_count_in_prime_array.append(state_count_in_prime)
-        output.write("Overall list of step counts: \n")
-        for count in state_count_array:
-            output.write("%d\n" % (count))
-        state_count_array[:]=[]
-        output.write("Overall list of good state step counts: \n")
-        for count in state_count_in_prime_array:
-            output.write("%d\n" % (count))
-        state_count_in_prime_array[:]=[]
         state_count = 0
         state_count_in_prime = 0
 
@@ -231,15 +239,16 @@ def standby(data):
         print("done")
         state_count_array.append(state_count)
         state_count_in_prime_array.append(state_count_in_prime)
-        output.write("Overall list of step counts: \n")
+        testOutput.write("Overall list of step counts: \n")
         for count in state_count_array:
-            output.write("%d\n" % (count))
+            testOutput.write("%d\n" % (count))
         state_count_array[:]=[]
-        output.write("Overall list of good state step counts: \n")
+        testOutput.write("Overall list of good state step counts: \n")
         for count in state_count_in_prime_array:
-            output.write("%d\n" % (count))
+            testOutput.write("%d\n" % (count))
         state_count_in_prime_array[:]=[]
-        output.close()
+        rewardOutput.close()
+        testOutput.close()
 
 def callback(data):
     if is_executing:

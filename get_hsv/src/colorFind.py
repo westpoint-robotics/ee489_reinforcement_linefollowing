@@ -87,10 +87,10 @@ def callback(data):
     w1 = int(w1)
     wP = int(w1/3)
     hP = int(h1/3)
-    cv2.line(cv_image,(wP,0),(wP,h1),(50,50,255),1)
-    cv2.line(cv_image,(2*wP,0),(2*wP,h1),(50,50,255),1)
-    cv2.line(cv_image,(0,hP),(w1,hP),(50,50,255),1)
-    cv2.line(cv_image,(0,2*hP),(w1,2*hP),(50,50,255),1)
+    cv2.line(cv_image,(wP,0),(wP,h1),(50,50,255),3)
+    cv2.line(cv_image,(2*wP,0),(2*wP,h1),(50,50,255),3)
+    cv2.line(cv_image,(0,hP),(w1,hP),(50,50,255),3)
+    cv2.line(cv_image,(0,2*hP),(w1,2*hP),(50,50,255),3)
     cv2.imshow('Camera', cv_image)
     cv2.imshow('res', res)
     cv2.waitKey(1)
@@ -108,7 +108,7 @@ def listener():
     # run simultaneously.
     rospy.loginfo("please")
     rospy.init_node('my_cam', anonymous=True)
-    rate = rospy.Rate(3) # 3hz
+    rate = rospy.Rate(2) # 1hz
     rospy.Subscriber("usb_cam/image_raw",Image, callback)
     while not rospy.is_shutdown():
         pub.publish(pub_state)
