@@ -10,6 +10,4 @@ The "logger" package contains the actual model and code to run and train it (DON
 
 The "robot_trainer" package contains the most up to date model using Keras
 
-Each "experiment" folder contains data from an experiment:
-1 - 3x3, decaying by .03
-2 - 3x3, decaying by .02
+Each "experiment" folder contains data experiments **Disregard all Experimental data not in "Better Experiments"**
